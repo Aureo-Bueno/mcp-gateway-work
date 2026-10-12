@@ -1,0 +1,89 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: mcp-gateway-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: mcp-gateway-postgres
+    environment:
+      POSTGRES_USER: mcp
+      POSTGRES_PASSWORD: mcp
+      POSTGRES_DB: mcp_gateway
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp_gateway"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      target: runtime
+    image: mcp-gateway:latest
+    container_name: mcp-gateway-migrate
+    command: ["sh", "-c", "node dist/migrate.js && node dist/seed.js"]
+    environment:
+      DATABASE_URL: postgres://mcp:mcp@postgres:5432/mcp_gateway
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  gateway:
+    build:
+      context: .
+      target: runtime
+    image: mcp-gateway:latest
+    container_name: mcp-gateway
+    command: ["node", "dist/index.js"]
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgres://mcp:mcp@postgres:5432/mcp_gateway
+      REDIS_URL: redis://redis:6379
+      GATEWAY_CONFIG: gateway.config.container.json
+      LOG_LEVEL: info
+      RATE_LIMIT_POINTS: "100"
+      RATE_LIMIT_DURATION: "60"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  postgres-data:

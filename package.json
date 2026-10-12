@@ -1,0 +1,60 @@
+{
+  "name": "mcp-work",
+  "version": "0.1.0",
+  "description": "MCP Gateway - a server that aggregates multiple MCP servers behind a single endpoint",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx src/db/seed.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f gateway",
+    "redis:up": "docker compose up -d redis",
+    "db:up": "docker compose up -d postgres"
+  },
+  "keywords": [
+    "mcp",
+    "gateway",
+    "ai"
+  ],
+  "author": "Rafael",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "drizzle-orm": "^0.45.4",
+    "express": "^5.3.0",
+    "ioredis": "^6.0.0",
+    "pg": "^8.13.1",
+    "pino": "^10.4.0",
+    "prom-client": "^15.1.3",
+    "rate-limiter-flexible": "^11.2.1",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.16.18",
+    "@swc/jest": "^0.2.39",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.11.10",
+    "@types/swagger-ui-express": "^4.1.8",
+    "drizzle-kit": "^0.31.11",
+    "jest": "^30.5.2",
+    "supertest": "^7.3.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

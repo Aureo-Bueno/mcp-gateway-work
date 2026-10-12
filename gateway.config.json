@@ -1,0 +1,10 @@
+{
+  "servers": [
+    {
+      "name": "echo",
+      "type": "stdio",
+      "command": "./node_modules/.bin/tsx",
+      "args": ["tests/fixtures/echo-server.ts"]
+    }
+  ]
+}

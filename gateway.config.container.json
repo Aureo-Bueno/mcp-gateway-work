@@ -1,0 +1,10 @@
+{
+  "servers": [
+    {
+      "name": "echo",
+      "type": "stdio",
+      "command": "node",
+      "args": ["dist/echo-server.js"]
+    }
+  ]
+}
