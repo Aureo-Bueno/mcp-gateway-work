@@ -4,6 +4,8 @@
 
 A TypeScript gateway that sits in front of multiple [MCP](https://modelcontextprotocol.io) servers and presents them to the client as **a single MCP server**. It adds authentication, per-profile authorization, rate limiting, auditing, metrics and **human approval** for dangerous tools.
 
+![MCP Gateway architecture](architecture.png)
+
 ```
 MCP client (Claude, agent, IDE)
         │  HTTP + JSON-RPC  (POST /mcp)
@@ -91,6 +93,14 @@ npm run docker:up          # docker compose up -d --build
 npm run docker:logs        # follow gateway logs
 npm run docker:down
 ```
+
+If a host port is already taken (for example, another Postgres on 5432), change only the published port. The containers keep talking over the internal network:
+
+```bash
+POSTGRES_HOST_PORT=5433 npm run docker:up
+```
+
+The variables are `POSTGRES_HOST_PORT`, `REDIS_HOST_PORT` and `GATEWAY_HOST_PORT`. You can also set them in `.env`, which Docker Compose reads automatically. If you run the gateway outside Docker against that Postgres, update the port in `DATABASE_URL`.
 
 The seed API keys show up in the migration container logs, not in the gateway's:
 

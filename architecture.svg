@@ -1,0 +1,236 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-labelledby="title desc">
+  <title id="title">MCP Gateway architecture</title>
+  <desc id="desc">MCP clients call a single POST /mcp endpoint. The gateway runs auth, rate limit, RBAC, human approval, read cache and routing on the way in, redacts secrets and writes the audit log on the way out, and keeps one MCP session per upstream server with health checks and auto-reconnect. PostgreSQL, Redis and Prometheus support it.</desc>
+
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#131c30" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#2dd4bf"/>
+    </marker>
+    <marker id="arrow-sky" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#64748b"/>
+    </marker>
+    <style>
+      text { font-family: Inter, "Segoe UI", "Helvetica Neue", "Liberation Sans", Arial, sans-serif; }
+      .mono { font-family: "JetBrains Mono", "SF Mono", Menlo, "DejaVu Sans Mono", monospace; }
+      .h1 { font-size: 40px; font-weight: 700; fill: #f1f5f9; letter-spacing: -0.5px; }
+      .sub { font-size: 17px; fill: #94a3b8; }
+      .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 2px; fill: #64748b; }
+      .lane { font-size: 12px; font-weight: 700; letter-spacing: 2px; }
+      .num { font-size: 12px; font-weight: 700; fill: #2dd4bf; }
+      .stage { font-size: 17px; font-weight: 700; fill: #e2e8f0; }
+      .cap { font-size: 12.5px; fill: #94a3b8; }
+      .capm { font-size: 12px; fill: #94a3b8; }
+      .card { font-size: 15px; font-weight: 600; fill: #e2e8f0; }
+      .cardcap { font-size: 12.5px; fill: #94a3b8; }
+      .label { font-size: 12.5px; fill: #cbd5e1; }
+      .labelm { font-size: 12px; fill: #cbd5e1; }
+      .foot { font-size: 14px; fill: #64748b; }
+    </style>
+  </defs>
+
+  <!-- background -->
+  <rect width="1600" height="1000" fill="#0a0f1c"/>
+  <rect width="1600" height="1000" fill="url(#grid)"/>
+
+  <!-- title -->
+  <text x="50" y="72" class="h1">MCP Gateway</text>
+  <text x="50" y="104" class="sub">One MCP endpoint in front of many MCP servers, with access control, human approval and secret redaction.</text>
+
+  <!-- human approver (top, above the approval stage) -->
+  <g>
+    <rect x="1022" y="122" width="250" height="52" rx="10" fill="#1c160a" stroke="#f59e0b" stroke-width="1.5"/>
+    <circle cx="1048" cy="148" r="11" fill="none" stroke="#fbbf24" stroke-width="2"/>
+    <circle cx="1048" cy="144" r="3.5" fill="#fbbf24"/>
+    <path d="M1041 155 q7 -7 14 0" fill="none" stroke="#fbbf24" stroke-width="2"/>
+    <text x="1070" y="144" class="card" style="fill:#fde68a">Human approver</text>
+    <text x="1070" y="163" class="cardcap"><tspan class="mono">/panel</tspan> or admin API</text>
+  </g>
+
+  <!-- clients -->
+  <text x="50" y="290" class="eyebrow">MCP CLIENTS</text>
+  <g>
+    <rect x="50" y="304" width="240" height="56" rx="10" fill="#111a2e" stroke="#26334f"/>
+    <text x="68" y="328" class="card">Chat assistants</text>
+    <text x="68" y="347" class="cardcap">Claude and other MCP hosts</text>
+    <rect x="50" y="374" width="240" height="56" rx="10" fill="#111a2e" stroke="#26334f"/>
+    <text x="68" y="398" class="card">IDEs</text>
+    <text x="68" y="417" class="cardcap">editors with MCP support</text>
+    <rect x="50" y="444" width="240" height="56" rx="10" fill="#111a2e" stroke="#26334f"/>
+    <text x="68" y="468" class="card">AI agents</text>
+    <text x="68" y="487" class="cardcap">your own code, any MCP SDK</text>
+  </g>
+  <line x1="306" y1="304" x2="306" y2="500" stroke="#334155" stroke-width="2"/>
+
+  <!-- request arrow: clients -> gateway -->
+  <line x1="306" y1="327" x2="371" y2="327" stroke="#2dd4bf" stroke-width="2" marker-end="url(#arrow-teal)"/>
+  <!-- response arrow: gateway -> clients -->
+  <line x1="373" y1="484" x2="308" y2="484" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow-sky)"/>
+  <text x="50" y="540" class="labelm mono">POST /mcp</text>
+  <text x="50" y="558" class="labelm">JSON-RPC 2.0 · x-api-key</text>
+  <text x="50" y="584" class="labelm">errors as JSON-RPC:</text>
+  <text x="50" y="602" class="labelm mono">-32003 forbidden</text>
+  <text x="50" y="620" class="labelm mono">-32004 not approved</text>
+
+  <!-- gateway container -->
+  <rect x="340" y="200" width="880" height="560" rx="16" fill="#0d1527" stroke="#2dd4bf" stroke-opacity="0.45" stroke-width="1.5"/>
+  <text x="372" y="236" class="eyebrow" style="fill:#2dd4bf">MCP GATEWAY</text>
+  <text x="1187" y="236" class="capm" text-anchor="end">an MCP server to clients · an MCP client to each upstream</text>
+
+  <!-- approver -> approval stage (drawn after the gateway box so it stays on top) -->
+  <path d="M1022 148 H 849 V 268" fill="none" stroke="#f59e0b" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#arrow-amber)"/>
+  <text x="862" y="178" class="label" style="fill:#fbbf24">approve / reject</text>
+
+  <!-- request lane -->
+  <text x="373" y="262" class="lane" style="fill:#2dd4bf">REQUEST →</text>
+
+  <!-- stage 1 auth -->
+  <g>
+    <rect x="373" y="272" width="124" height="128" rx="10" fill="#111c33" stroke="#26334f"/>
+    <text x="387" y="296" class="num">01</text>
+    <text x="387" y="320" class="stage">Auth</text>
+    <text x="387" y="344" class="cap">API key</text>
+    <text x="387" y="362" class="cap">SHA-256 hash</text>
+    <text x="387" y="380" class="cap">expiry, revoke</text>
+  </g>
+  <!-- stage 2 rate limit -->
+  <g>
+    <rect x="511" y="272" width="124" height="128" rx="10" fill="#111c33" stroke="#26334f"/>
+    <text x="525" y="296" class="num">02</text>
+    <text x="525" y="320" class="stage">Rate limit</text>
+    <text x="525" y="344" class="cap">one budget</text>
+    <text x="525" y="362" class="cap">per user</text>
+    <text x="525" y="380" class="cap">Redis + memory</text>
+  </g>
+  <!-- stage 3 rbac -->
+  <g>
+    <rect x="649" y="272" width="124" height="128" rx="10" fill="#111c33" stroke="#26334f"/>
+    <text x="663" y="296" class="num">03</text>
+    <text x="663" y="320" class="stage">RBAC</text>
+    <text x="663" y="344" class="cap">glob profiles</text>
+    <text x="663" y="362" class="capm mono">github__list_*</text>
+    <text x="663" y="380" class="cap">filters tools/list</text>
+  </g>
+  <!-- stage 4 approval (highlight) -->
+  <g>
+    <rect x="787" y="272" width="124" height="128" rx="10" fill="#1c160a" stroke="#f59e0b" stroke-width="1.6"/>
+    <text x="801" y="296" class="num" style="fill:#f59e0b">04</text>
+    <text x="801" y="320" class="stage" style="fill:#fde68a">Approval</text>
+    <text x="801" y="344" class="cap" style="fill:#d6b98a">call waits for</text>
+    <text x="801" y="362" class="cap" style="fill:#d6b98a">a human</text>
+    <text x="801" y="380" class="capm mono" style="fill:#d6b98a">*__delete_*</text>
+  </g>
+  <!-- stage 5 cache -->
+  <g>
+    <rect x="925" y="272" width="124" height="128" rx="10" fill="#111c33" stroke="#26334f"/>
+    <text x="939" y="296" class="num">05</text>
+    <text x="939" y="320" class="stage">Read cache</text>
+    <text x="939" y="344" class="cap">read-only tools</text>
+    <text x="939" y="362" class="capm mono">get_* list_*</text>
+    <text x="939" y="380" class="cap">TTL per server</text>
+  </g>
+  <!-- stage 6 router -->
+  <g>
+    <rect x="1063" y="272" width="124" height="128" rx="10" fill="#111c33" stroke="#26334f"/>
+    <text x="1077" y="296" class="num">06</text>
+    <text x="1077" y="320" class="stage">Router</text>
+    <text x="1077" y="344" class="capm mono">server__tool</text>
+    <text x="1077" y="362" class="cap">tools, resources</text>
+    <text x="1077" y="380" class="cap">and prompts</text>
+  </g>
+  <!-- chevrons between stages -->
+  <g stroke="#2dd4bf" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M500 330 l5 6 l-5 6"/>
+    <path d="M638 330 l5 6 l-5 6"/>
+    <path d="M776 330 l5 6 l-5 6"/>
+    <path d="M914 330 l5 6 l-5 6"/>
+    <path d="M1052 330 l5 6 l-5 6"/>
+  </g>
+
+  <!-- response lane -->
+  <text x="373" y="440" class="lane" style="fill:#7dd3fc">← RESPONSE</text>
+  <g>
+    <rect x="373" y="452" width="330" height="80" rx="10" fill="#0f1d2e" stroke="#1f3a52"/>
+    <text x="391" y="480" class="stage">Audit log</text>
+    <text x="391" y="502" class="cap">every outcome: success, forbidden, rejected,</text>
+    <text x="391" y="520" class="cap">expired, rate-limited · masked arguments</text>
+  </g>
+  <g>
+    <rect x="727" y="452" width="330" height="80" rx="10" fill="#0f1d2e" stroke="#1f3a52"/>
+    <text x="745" y="480" class="stage">Secret redaction</text>
+    <text x="745" y="502" class="cap">API keys, tokens, JWT, CPF, cards → <tspan class="mono" style="fill:#e2e8f0">***</tspan></text>
+    <text x="745" y="520" class="cap">before the model, the logs and the database</text>
+  </g>
+  <line x1="725" y1="492" x2="705" y2="492" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow-sky)"/>
+
+  <!-- router <-> registry vertical, and response into redaction -->
+  <line x1="1125" y1="402" x2="1125" y2="584" stroke="#2dd4bf" stroke-width="2" marker-end="url(#arrow-teal)"/>
+  <path d="M1110 584 V 492 H 1059" fill="none" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow-sky)"/>
+
+  <!-- registry -->
+  <g>
+    <rect x="373" y="588" width="814" height="140" rx="10" fill="#111c33" stroke="#26334f"/>
+    <text x="391" y="618" class="stage">Server registry + health monitor</text>
+    <text x="391" y="646" class="cap">one MCP session per upstream, merged into a single catalog of tools, resources and prompts</text>
+    <text x="391" y="668" class="cap">ping every 30 s · reopens dropped sessions · retries servers that failed to start</text>
+    <text x="391" y="690" class="cap">add or remove servers at runtime from the admin API, no restart</text>
+    <text x="391" y="712" class="capm mono" style="fill:#64748b">resources exposed as mcp-gateway://&lt;server&gt;/&lt;uri&gt;</text>
+  </g>
+
+  <!-- upstreams -->
+  <text x="1290" y="578" class="eyebrow">UPSTREAM MCP SERVERS</text>
+  <g>
+    <rect x="1290" y="592" width="260" height="50" rx="10" fill="#111a2e" stroke="#26334f"/>
+    <text x="1308" y="622" class="card">filesystem</text>
+    <text x="1532" y="622" class="cardcap mono" text-anchor="end">stdio</text>
+    <rect x="1290" y="652" width="260" height="50" rx="10" fill="#111a2e" stroke="#26334f"/>
+    <text x="1308" y="682" class="card">github</text>
+    <text x="1532" y="682" class="cardcap mono" text-anchor="end">HTTP</text>
+    <rect x="1290" y="712" width="260" height="50" rx="10" fill="#111a2e" stroke="#26334f" stroke-dasharray="5 4"/>
+    <text x="1308" y="742" class="card">any MCP server</text>
+    <text x="1532" y="742" class="cardcap mono" text-anchor="end">stdio | HTTP</text>
+  </g>
+  <g stroke="#2dd4bf" stroke-width="1.6" fill="none">
+    <path d="M1187 658 C 1240 658, 1240 617, 1288 617" marker-end="url(#arrow-teal)"/>
+    <path d="M1187 658 C 1240 658, 1240 677, 1288 677" marker-end="url(#arrow-teal)"/>
+    <path d="M1187 658 C 1240 658, 1240 737, 1288 737" marker-end="url(#arrow-teal)"/>
+  </g>
+
+  <!-- infra -->
+  <g stroke="#64748b" stroke-width="1.4" stroke-dasharray="4 4">
+    <line x1="480" y1="762" x2="480" y2="806" marker-end="url(#arrow-slate)"/>
+    <line x1="780" y1="762" x2="780" y2="806" marker-end="url(#arrow-slate)"/>
+    <line x1="1080" y1="762" x2="1080" y2="806" marker-end="url(#arrow-slate)"/>
+  </g>
+  <g>
+    <rect x="340" y="810" width="280" height="96" rx="10" fill="#111a2e" stroke="#26334f"/>
+    <text x="358" y="840" class="card">PostgreSQL</text>
+    <text x="358" y="864" class="cardcap">audit log, approvals, servers,</text>
+    <text x="358" y="884" class="cardcap">users and hashed API keys</text>
+  </g>
+  <g>
+    <rect x="640" y="810" width="280" height="96" rx="10" fill="#111a2e" stroke="#26334f"/>
+    <text x="658" y="840" class="card">Redis</text>
+    <text x="658" y="864" class="cardcap">rate limit counters shared</text>
+    <text x="658" y="884" class="cardcap">across gateway instances</text>
+  </g>
+  <g>
+    <rect x="940" y="810" width="280" height="96" rx="10" fill="#111a2e" stroke="#26334f"/>
+    <text x="958" y="840" class="card">Prometheus</text>
+    <text x="958" y="864" class="cardcap"><tspan class="mono">/metrics</tspan>: calls, latency, approvals,</text>
+    <text x="958" y="884" class="cardcap">redactions, cache, upstream health</text>
+  </g>
+
+  <!-- footer -->
+  <line x1="50" y1="940" x2="1550" y2="940" stroke="#1e293b"/>
+  <text x="50" y="972" class="foot">TypeScript · Node.js · MCP SDK · Express 5 · Drizzle · PostgreSQL · Redis · Docker Compose</text>
+  <text x="1550" y="972" class="foot mono" text-anchor="end">github.com/Aureo-Bueno/mcp-gateway-work</text>
+</svg>
