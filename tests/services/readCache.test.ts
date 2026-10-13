@@ -22,6 +22,37 @@ describe('readCache', () => {
     expect(isReadOnlyTool('ask_question')).toBe(false)
   })
 
+  it('accepts camelCase, kebab-case and dotted read-only names', () => {
+    expect(isReadOnlyTool('getUser')).toBe(true)
+    expect(isReadOnlyTool('listFiles')).toBe(true)
+    expect(isReadOnlyTool('get-user')).toBe(true)
+    expect(isReadOnlyTool('read.file')).toBe(true)
+    expect(isReadOnlyTool('statusCheck')).toBe(true)
+    expect(isReadOnlyTool('getHTTPStatus')).toBe(true)
+  })
+
+  it('never caches names that mention a side effect anywhere', () => {
+    expect(isReadOnlyTool('get_or_create_user')).toBe(false)
+    expect(isReadOnlyTool('getOrCreateUser')).toBe(false)
+    expect(isReadOnlyTool('find_and_replace')).toBe(false)
+    expect(isReadOnlyTool('read_and_delete')).toBe(false)
+    expect(isReadOnlyTool('show_notification')).toBe(false)
+    expect(isReadOnlyTool('fetch_and_update_cache')).toBe(false)
+    expect(isReadOnlyTool('search_and_send')).toBe(false)
+  })
+
+  it('does not cache generic query tools, which may run writes', () => {
+    expect(isReadOnlyTool('query')).toBe(false)
+    expect(isReadOnlyTool('query_database')).toBe(false)
+    expect(isReadOnlyTool('get_sql')).toBe(false)
+  })
+
+  it('does not treat verbs that only start like a read verb as read-only', () => {
+    expect(isReadOnlyTool('start_server')).toBe(false)
+    expect(isReadOnlyTool('getaway')).toBe(false)
+    expect(isReadOnlyTool('')).toBe(false)
+  })
+
   it('builds order-independent cache keys', () => {
     const a = makeCacheKey('echo', 'get', { a: 1, b: 2 })
     const b = makeCacheKey('echo', 'get', { b: 2, a: 1 })

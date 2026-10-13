@@ -39,6 +39,33 @@ export interface RedactionOptions {
   rules?: RedactionRule[]
 }
 
+/**
+ * Key names whose values are treated as secrets regardless of their content.
+ * Matched against the key lowercased with separators removed, by suffix, so
+ * `password`, `db_password`, `githubToken` and `x-api-key` all match while
+ * `max_tokens` or `token_type` do not.
+ */
+const SENSITIVE_KEY_SUFFIXES = [
+  'password',
+  'passwd',
+  'secret',
+  'token',
+  'apikey',
+  'authorization',
+  'privatekey',
+  'credential',
+  'credentials',
+  'cookie',
+  'sessionid',
+]
+
+export const isSensitiveKey = (key: string): boolean => {
+  const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, '')
+  return SENSITIVE_KEY_SUFFIXES.some((suffix) => normalized.endsWith(suffix))
+}
+
+const SENSITIVE_KEY_RULE = 'sensitive_key'
+
 export const redactString = (
   input: string,
   replacement = '***',
@@ -59,29 +86,43 @@ export const redactString = (
   return { text, hits }
 }
 
-const redactValue = (
-  value: unknown,
-  summary: RedactionSummary,
-  replacement: string,
+interface WalkOptions {
+  replacement: string
   rules: RedactionRule[]
-): unknown => {
+  maskSensitiveKeys: boolean
+}
+
+const countHit = (summary: RedactionSummary, rule: string, count: number): void => {
+  summary.hits[rule] = (summary.hits[rule] ?? 0) + count
+  summary.total += count
+}
+
+const redactValue = (value: unknown, summary: RedactionSummary, options: WalkOptions): unknown => {
   if (typeof value === 'string') {
-    const { text, hits } = redactString(value, replacement, rules)
+    const { text, hits } = redactString(value, options.replacement, options.rules)
     for (const [rule, count] of Object.entries(hits)) {
-      summary.hits[rule] = (summary.hits[rule] ?? 0) + count
-      summary.total += count
+      countHit(summary, rule, count)
     }
     return text
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => redactValue(item, summary, replacement, rules))
+    return value.map((item) => redactValue(item, summary, options))
   }
 
   if (value !== null && typeof value === 'object') {
     const out: Record<string, unknown> = {}
     for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = redactValue(item, summary, replacement, rules)
+      if (
+        options.maskSensitiveKeys &&
+        isSensitiveKey(key) &&
+        (typeof item === 'string' || typeof item === 'number')
+      ) {
+        countHit(summary, SENSITIVE_KEY_RULE, 1)
+        out[key] = options.replacement
+        continue
+      }
+      out[key] = redactValue(item, summary, options)
     }
     return out
   }
@@ -89,19 +130,39 @@ const redactValue = (
   return value
 }
 
-export const redactToolResult = <T>(
-  result: T,
-  options: RedactionOptions = {}
+const redact = <T>(
+  value: T,
+  options: RedactionOptions,
+  maskSensitiveKeys: boolean
 ): { result: T; summary: RedactionSummary } => {
   const summary: RedactionSummary = { total: 0, hits: {} }
 
   if (options.enabled === false) {
-    return { result, summary }
+    return { result: value, summary }
   }
 
-  const replacement = options.replacement ?? '***'
-  const rules = options.rules ?? DEFAULT_REDACTION_RULES
-  const redacted = redactValue(result, summary, replacement, rules) as T
+  const redacted = redactValue(value, summary, {
+    replacement: options.replacement ?? '***',
+    rules: options.rules ?? DEFAULT_REDACTION_RULES,
+    maskSensitiveKeys,
+  }) as T
 
   return { result: redacted, summary }
 }
+
+/** Redacts secrets found in the text of a tool, resource or prompt response. */
+export const redactToolResult = <T>(
+  result: T,
+  options: RedactionOptions = {}
+): { result: T; summary: RedactionSummary } => redact(result, options, false)
+
+/**
+ * Redacts secrets from request arguments before they are persisted (audit log,
+ * approvals). On top of the value patterns, any string or number stored under a
+ * sensitive key name (`password`, `token`, `api_key`, ...) is masked. The original
+ * arguments are still the ones forwarded to the upstream server.
+ */
+export const redactArguments = <T>(
+  args: T,
+  options: RedactionOptions = {}
+): { result: T; summary: RedactionSummary } => redact(args, options, true)

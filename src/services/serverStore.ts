@@ -63,6 +63,12 @@ export const listServerConfigs = async (): Promise<ServerConfig[]> => {
     .filter((config): config is ServerConfig => config !== null)
 }
 
+export const getServerConfig = async (name: string): Promise<ServerConfig | null> => {
+  const rows = await getDb().select().from(servers).where(eq(servers.name, name))
+  const row = rows[0]
+  return row === undefined ? null : rowToServerConfig(row)
+}
+
 export const countServers = async (): Promise<number> => {
   const rows = await getDb().select({ id: servers.id }).from(servers)
   return rows.length

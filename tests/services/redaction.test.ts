@@ -1,4 +1,4 @@
-import { redactString, redactToolResult } from '../../src/services/redaction'
+import { isSensitiveKey, redactArguments, redactString, redactToolResult } from '../../src/services/redaction'
 
 describe('redactString', () => {
   it('redacts OpenAI-style keys', () => {
@@ -69,5 +69,58 @@ describe('redactToolResult', () => {
     const { result, summary } = redactToolResult(input, { enabled: false })
     expect(result.text).toBe('cpf 123.456.789-00')
     expect(summary.total).toBe(0)
+  })
+})
+
+describe('isSensitiveKey', () => {
+  it('matches secret-looking key names in any casing or separator style', () => {
+    for (const key of ['password', 'db_password', 'githubToken', 'access_token', 'x-api-key', 'apiKey', 'Authorization', 'client_secret', 'private_key', 'Cookie']) {
+      expect(isSensitiveKey(key)).toBe(true)
+    }
+  })
+
+  it('does not match ordinary keys that merely contain a similar word', () => {
+    for (const key of ['max_tokens', 'token_type', 'secret_name', 'path', 'text', 'query']) {
+      expect(isSensitiveKey(key)).toBe(false)
+    }
+  })
+})
+
+describe('redactArguments', () => {
+  it('masks values stored under sensitive keys, even when the value looks harmless', () => {
+    const { result, summary } = redactArguments({
+      name: 'github__create_issue',
+      arguments: { title: 'bug', password: 'hunter2', db: { apiKey: 'abc', port: 5432 }, retries: 3 },
+    })
+
+    expect(result.arguments.title).toBe('bug')
+    expect(result.arguments.password).toBe('***')
+    expect(result.arguments.db.apiKey).toBe('***')
+    expect(result.arguments.db.port).toBe(5432)
+    expect(result.arguments.retries).toBe(3)
+    expect(summary.hits['sensitive_key']).toBe(2)
+  })
+
+  it('also applies the value patterns to every string', () => {
+    const { result } = redactArguments({ text: 'my key is sk-abcdef0123456789ABCD' })
+    expect(result.text).toBe('my key is ***')
+  })
+
+  it('is a no-op when disabled', () => {
+    const input = { password: 'hunter2' }
+    expect(redactArguments(input, { enabled: false }).result).toEqual(input)
+  })
+
+  it('does not mutate the original arguments forwarded upstream', () => {
+    const input = { password: 'hunter2' }
+    redactArguments(input)
+    expect(input.password).toBe('hunter2')
+  })
+})
+
+describe('redactToolResult and sensitive keys', () => {
+  it('does not mask response fields by key name, so pagination tokens keep working', () => {
+    const { result } = redactToolResult({ structuredContent: { nextPageToken: 'cursor-42' } })
+    expect(result.structuredContent.nextPageToken).toBe('cursor-42')
   })
 })

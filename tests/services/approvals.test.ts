@@ -118,4 +118,72 @@ describe('approval decisions', () => {
     const stored = (await listApprovals(200)).find((a) => a.id === approval.id)
     expect(stored?.status).toBe('expired')
   })
+
+  it('refuses to approve a call after its deadline, even if it is still pending in the database', async () => {
+    const approval = await createApproval({
+      userId: 1,
+      userName: USER,
+      serverName: 'echo',
+      toolName: TOOL,
+      args: {},
+      ttlMs: 20,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    expect(await decideApproval(approval.id, 'approved', 'admin')).toBeNull()
+    const stored = (await listApprovals(200)).find((a) => a.id === approval.id)
+    expect(stored?.status).toBe('expired')
+  })
+
+  it('keeps the stored decision when the timer fires right after an approval', async () => {
+    const approval = await createApproval({
+      userId: 1,
+      userName: USER,
+      serverName: 'echo',
+      toolName: TOOL,
+      args: {},
+      ttlMs: 5000,
+    })
+    const decision = waitForDecision(approval.id, 50)
+
+    // Simulate the race: the approval lands in the database but the in-memory
+    // waiter is not notified before the timeout fires.
+    await getDb().update(approvals).set({ status: 'approved', decidedBy: 'admin' }).where(eq(approvals.id, approval.id))
+
+    expect(await decision).toBe('approved')
+  })
+
+  it('stores approval arguments with secrets masked', async () => {
+    const approval = await createApproval({
+      userId: 1,
+      userName: USER,
+      serverName: 'echo',
+      toolName: TOOL,
+      args: { path: '/tmp/x', password: 'hunter2', note: 'key sk-abcdef0123456789ABCD' },
+      ttlMs: 5000,
+    })
+
+    expect(approval.arguments['path']).toBe('/tmp/x')
+    expect(approval.arguments['password']).toBe('***')
+    expect(approval.arguments['note']).toBe('key ***')
+  })
+
+  it('resolves as expired instead of hanging when the expiry cannot be written', async () => {
+    const approval = await createApproval({
+      userId: 1,
+      userName: USER,
+      serverName: 'echo',
+      toolName: TOOL,
+      args: {},
+      ttlMs: 30,
+    })
+    const decision = waitForDecision(approval.id, 30)
+
+    await closeDb()
+    try {
+      expect(await decision).toBe('expired')
+    } finally {
+      await initDb(getEnv().DATABASE_URL)
+    }
+  })
 })

@@ -6,21 +6,17 @@ import { startHealthMonitor, stopHealthMonitor } from './gateway/healthMonitor'
 import { createApp } from './http/app'
 import { logger } from './logger'
 import { RateLimiter } from './services/rateLimiter'
-import { countServers, listServerConfigs, saveServer } from './services/serverStore'
+import { seedServersFromConfigOnce } from './services/serverBootstrap'
+import { listServerConfigs } from './services/serverStore'
 
 const main = async (): Promise<void> => {
   const env = getEnv()
 
   await initDb(env.DATABASE_URL)
 
-  if ((await countServers()) === 0) {
-    const fileConfig = loadGatewayConfig(env.GATEWAY_CONFIG)
-    for (const config of fileConfig.servers) {
-      await saveServer(config)
-    }
-    if (fileConfig.servers.length > 0) {
-      logger.info({ count: fileConfig.servers.length, path: env.GATEWAY_CONFIG }, 'Seeded servers from config file')
-    }
+  const seed = await seedServersFromConfigOnce(() => loadGatewayConfig(env.GATEWAY_CONFIG).servers)
+  if (seed.seeded > 0) {
+    logger.info({ count: seed.seeded, path: env.GATEWAY_CONFIG }, 'Seeded servers from config file')
   }
 
   const config = await listServerConfigs()
@@ -30,7 +26,10 @@ const main = async (): Promise<void> => {
     logger.info({ servers: connection.connected }, 'Connected upstream MCP servers')
   }
   for (const failure of connection.failed) {
-    logger.error({ server: failure.name, err: failure.error }, 'Failed to connect upstream MCP server')
+    logger.error(
+      { server: failure.name, err: failure.error },
+      'Failed to connect upstream MCP server; the health monitor will retry it'
+    )
   }
 
   startHealthMonitor(env.HEALTH_CHECK_INTERVAL_SECONDS)

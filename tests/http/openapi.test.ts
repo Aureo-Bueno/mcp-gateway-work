@@ -1,4 +1,4 @@
-import { openApiDocument } from '../../src/http/openapi'
+import { NO_HTTP_FORBIDDEN_PATHS, openApiDocument } from '../../src/http/openapi'
 
 interface Operation {
   security?: unknown
@@ -13,7 +13,7 @@ describe('openApiDocument', () => {
     expect(servers[0]?.url).toBe('/')
   })
 
-  it('documents 401 and 403 for every secured operation', () => {
+  it('documents 401 and 403 for every secured operation (except /mcp)', () => {
     const missing: string[] = []
     for (const [path, pathItem] of Object.entries(paths)) {
       for (const [method, operation] of Object.entries(pathItem)) {
@@ -23,12 +23,16 @@ describe('openApiDocument', () => {
         if (operation.responses?.['401'] === undefined) {
           missing.push(`${method.toUpperCase()} ${path} -> missing 401`)
         }
-        if (operation.responses?.['403'] === undefined) {
+        if (!NO_HTTP_FORBIDDEN_PATHS.has(path) && operation.responses?.['403'] === undefined) {
           missing.push(`${method.toUpperCase()} ${path} -> missing 403`)
         }
       }
     }
     expect(missing).toEqual([])
+  })
+
+  it('does not document HTTP 403 for /mcp, where authorization errors are JSON-RPC', () => {
+    expect(paths['/mcp']?.['post']?.responses?.['403']).toBeUndefined()
   })
 
   it('declares the API key security scheme for the Authorize button', () => {

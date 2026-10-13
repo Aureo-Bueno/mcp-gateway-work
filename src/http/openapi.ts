@@ -19,13 +19,15 @@ const standardErrorResponses = (): JsonObject => ({
   },
 })
 
+export const NO_HTTP_FORBIDDEN_PATHS = new Set(['/mcp'])
+
 const withStandardErrors = (document: JsonObject): JsonObject => {
   const paths = document['paths'] as Record<string, Record<string, JsonObject>> | undefined
   if (paths === undefined) {
     return document
   }
 
-  for (const pathItem of Object.values(paths)) {
+  for (const [path, pathItem] of Object.entries(paths)) {
     for (const operation of Object.values(pathItem)) {
       if (operation['security'] === undefined) {
         continue
@@ -36,6 +38,10 @@ const withStandardErrors = (document: JsonObject): JsonObject => {
       }
       const target = responses as Record<string, JsonObject>
       for (const [code, response] of Object.entries(standardErrorResponses())) {
+        // /mcp never answers 403: authorization errors are JSON-RPC errors.
+        if (code === '403' && NO_HTTP_FORBIDDEN_PATHS.has(path)) {
+          continue
+        }
         if (target[code] === undefined) {
           target[code] = response
         }
@@ -145,12 +151,26 @@ const document: JsonObject = {
         properties: {
           id: { type: 'integer' },
           userId: { type: 'integer', nullable: true },
+          method: { type: 'string', enum: ['tools/call', 'resources/read', 'prompts/get'] },
           serverName: { type: 'string' },
-          toolName: { type: 'string' },
-          requestJson: {},
+          toolName: { type: 'string', description: 'Prefixed tool or prompt name, or the exposed resource URI' },
+          requestJson: { description: 'Request params with secrets redacted' },
           responseJson: {},
           latencyMs: { type: 'integer' },
-          status: { type: 'string', example: 'success' },
+          status: {
+            type: 'string',
+            enum: [
+              'success',
+              'error',
+              'forbidden',
+              'unknown_tool',
+              'unknown_resource',
+              'unknown_prompt',
+              'rejected',
+              'expired',
+              'rate_limited',
+            ],
+          },
           createdAt: { type: 'string', format: 'date-time' },
         },
       },
@@ -223,7 +243,10 @@ const document: JsonObject = {
           '`resources/templates/list`, `resources/read`, `prompts/list`, `prompts/get`, `ping`, ' +
           'notifications. Resources are exposed under `mcp-gateway://<server>/<uri>`; prompts are ' +
           'prefixed with `<server>__`. Tool and resource responses are scanned and sensitive ' +
-          'values (API keys, tokens, CPF, card numbers) are redacted before being returned.',
+          'values (API keys, tokens, CPF, card numbers) are redacted before being returned.\n\n' +
+          'Application errors are returned as JSON-RPC errors with HTTP 200: `-32003` tool forbidden ' +
+          'by the caller profile, `-32004` tool call rejected or not approved in time, `-32602` invalid ' +
+          'params or unknown tool/resource/prompt, `-32601` unknown method, `-32603` upstream failure.',
         security: apiKeySecurity,
         requestBody: {
           required: true,
@@ -235,8 +258,14 @@ const document: JsonObject = {
             content: { 'application/json': { schema: { $ref: '#/components/schemas/JsonRpcResponse' } } },
           },
           '401': { description: 'Missing or invalid API key', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
-          '403': { description: 'Tool forbidden by profile', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
-          '429': { description: 'Rate limit exceeded', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          '429': {
+            description: 'Rate limit exceeded (one budget per user). See the `Retry-After` header.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+          },
+          '503': {
+            description: 'Rate limiter unavailable; the request was denied',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+          },
         },
       },
     },

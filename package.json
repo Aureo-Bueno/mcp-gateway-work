@@ -13,7 +13,6 @@
     "db:seed": "tsx src/db/seed.ts",
     "test": "jest",
     "test:watch": "jest --watch",
-    "lint": "eslint src/**/*.ts",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
     "docker:up": "docker compose up -d --build",
@@ -27,8 +26,19 @@
     "gateway",
     "ai"
   ],
-  "author": "Rafael",
+  "author": "Aureo Bueno <aureoalexandre@outlook.com>",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aureo-Bueno/mcp-gateway-work.git"
+  },
+  "homepage": "https://github.com/Aureo-Bueno/mcp-gateway-work#readme",
+  "bugs": {
+    "url": "https://github.com/Aureo-Bueno/mcp-gateway-work/issues"
+  },
   "type": "module",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",

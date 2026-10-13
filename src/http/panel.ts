@@ -89,7 +89,7 @@ export const panelHtml = `<!DOCTYPE html>
           <select id="s-type"><option value="stdio">stdio</option><option value="http">http</option></select>
         </div>
         <div class="field span-2" id="s-command-field"><label>Command</label><input id="s-command" placeholder="npx" /></div>
-        <div class="field span-2" id="s-args-field"><label>Args <span class="muted">(space separated; use "quotes" for spaces)</span></label><input id="s-args" placeholder='-y @modelcontextprotocol/server-filesystem /home/rafael/Desktop' /></div>
+        <div class="field span-2" id="s-args-field"><label>Args <span class="muted">(space separated; use "quotes" for spaces)</span></label><input id="s-args" placeholder='-y @modelcontextprotocol/server-filesystem /home/user/Desktop' /></div>
         <div class="field span-2" id="s-env-field"><label>Env <span class="muted">(optional, KEY=VALUE per line — stdio only)</span></label><textarea id="s-env" rows="2" placeholder="GITHUB_TOKEN=ghp_xxx"></textarea></div>
         <div class="field span-2" id="s-url-field" style="display:none"><label>URL <span class="muted">(http only)</span></label><input id="s-url" placeholder="http://host:port/mcp" /></div>
         <div class="field span-2" id="s-headers-field" style="display:none"><label>Headers <span class="muted">(optional, KEY=VALUE per line — http only)</span></label><textarea id="s-headers" rows="2" placeholder="Authorization=Bearer ghp_xxx"></textarea></div>
@@ -154,7 +154,7 @@ export const panelHtml = `<!DOCTYPE html>
     <div class="card">
       <h2>Audit log <span class="muted">(auto-refresh 5s)</span></h2>
       <button class="ghost" id="audit-refresh">Reload</button>
-      <table><thead><tr><th>Time</th><th>User</th><th>Server</th><th>Tool</th><th>Status</th><th>Latency</th></tr></thead><tbody id="audit-body"></tbody></table>
+      <table><thead><tr><th>Time</th><th>User</th><th>Method</th><th>Server</th><th>Target</th><th>Status</th><th>Latency</th></tr></thead><tbody id="audit-body"></tbody></table>
     </div>
   </section>
 
@@ -249,7 +249,7 @@ export const panelHtml = `<!DOCTYPE html>
         : (s.healthy ? '<span class="pill ok">ok</span>' : '<span class="pill bad">down</span>');
       var latency = s.lastPingMs === null ? '' : ' (' + esc(s.lastPingMs) + ' ms)';
       return '<tr><td>' + esc(s.name) + '</td><td>' + esc(s.type) + '</td>' +
-        '<td>' + (s.connected ? '<span class="pill ok">yes</span>' : '<span class="pill bad">no</span>') + '</td>' +
+        '<td>' + (s.connected ? '<span class="pill ok">yes</span>' : '<span class="pill bad" title="' + esc(s.lastError || '') + '">no</span>' + (s.connectAttempts ? ' <span class="muted">(' + esc(s.connectAttempts) + ' tries)</span>' : '')) + '</td>' +
         '<td>' + health + latency + '</td>' +
         '<td>' + esc(s.toolCount) + '</td>' +
         '<td><button class="ghost" data-ping="' + esc(s.name) + '"' + (s.connected ? '' : ' disabled') + '>Ping</button> ' +
@@ -423,10 +423,10 @@ export const panelHtml = `<!DOCTYPE html>
   async function loadAudit() {
     var list = await api('/admin/audit?limit=50');
     document.getElementById('audit-body').innerHTML = list.map(function (a) {
-      return '<tr><td>' + esc(new Date(a.createdAt).toLocaleTimeString()) + '</td><td>' + esc(a.userId) + '</td><td>' + esc(a.serverName) + '</td>' +
-        '<td>' + esc(a.toolName) + '</td><td>' + (a.status === 'success' ? '<span class="pill ok">ok</span>' : '<span class="pill bad">error</span>') + '</td>' +
+      return '<tr><td>' + esc(new Date(a.createdAt).toLocaleTimeString()) + '</td><td>' + esc(a.userId) + '</td><td>' + esc(a.method) + '</td><td>' + esc(a.serverName) + '</td>' +
+        '<td>' + esc(a.toolName) + '</td><td>' + (a.status === 'success' ? '<span class="pill ok">ok</span>' : '<span class="pill bad">' + esc(a.status) + '</span>') + '</td>' +
         '<td>' + esc(a.latencyMs) + ' ms</td></tr>';
-    }).join('') || '<tr><td colspan="6" class="muted">none</td></tr>';
+    }).join('') || '<tr><td colspan="7" class="muted">none</td></tr>';
   }
   loaders.audit = loadAudit;
   document.getElementById('audit-refresh').onclick = function () { withLoading(this, loadAudit); };

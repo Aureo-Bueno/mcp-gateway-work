@@ -80,14 +80,28 @@ export interface GetPromptParams {
   arguments?: Record<string, string>
 }
 
+export type AuditMethod = 'tools/call' | 'resources/read' | 'prompts/get'
+
+export type AuditStatus =
+  | 'success'
+  | 'error'
+  | 'forbidden'
+  | 'unknown_tool'
+  | 'unknown_resource'
+  | 'unknown_prompt'
+  | 'rejected'
+  | 'expired'
+  | 'rate_limited'
+
 export interface AuditEntry {
   userId: number | null
+  method?: AuditMethod
   serverName: string
   toolName: string
   request: unknown
   response: unknown
   latencyMs: number
-  status: 'success' | 'error'
+  status: AuditStatus
 }
 
 export type { CallToolResult, Tool, Resource, ResourceTemplate, Prompt }

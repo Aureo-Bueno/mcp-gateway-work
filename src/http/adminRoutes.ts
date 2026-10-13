@@ -16,7 +16,7 @@ import {
   replaceProfileTools,
   revokeApiKey,
 } from '../services/credentials'
-import { deleteServerRecord, listServerRecords, saveServer } from '../services/serverStore'
+import { deleteServerRecord, getServerConfig, listServerRecords, saveServer } from '../services/serverStore'
 import { getHealth, listHealth, removeHealth } from '../services/health'
 import { clearReadCache } from '../services/readCache'
 import { metricsRegistry } from '../services/metrics'
@@ -64,11 +64,14 @@ adminRoutes.get('/servers', async (_req: Request, res: Response): Promise<void> 
     records.map((record) => {
       const connected = registry.has(record.name)
       const health = getHealth(record.name)
+      const failure = registry.getFailure(record.name)
       return {
         name: record.name,
         type: record.type,
         connected,
         toolCount: connected ? registry.get(record.name).tools.length : 0,
+        lastError: connected ? null : (failure?.error ?? null),
+        connectAttempts: failure?.attempts ?? 0,
         healthy: health === undefined ? null : health.healthy,
         lastPingMs: health?.latencyMs ?? null,
         lastCheckAt: health?.checkedAt ?? null,
@@ -116,7 +119,7 @@ adminRoutes.post(
     }
     const approval = await decideApproval(id, 'approved', req.caller?.userName ?? 'admin')
     if (approval === null) {
-      res.status(404).json({ error: `Approval ${id} is not pending` })
+      res.status(404).json({ error: `Approval ${id} is not pending or has expired` })
       return
     }
     res.json(approval)
@@ -133,7 +136,7 @@ adminRoutes.post(
     }
     const approval = await decideApproval(id, 'rejected', req.caller?.userName ?? 'admin')
     if (approval === null) {
-      res.status(404).json({ error: `Approval ${id} is not pending` })
+      res.status(404).json({ error: `Approval ${id} is not pending or has expired` })
       return
     }
     res.json(approval)
@@ -273,7 +276,7 @@ adminRoutes.post('/servers', async (req: Request, res: Response, next: NextFunct
   try {
     const server = await registry.register(parsed.data)
     await saveServer(parsed.data)
-    clearReadCache()
+    clearReadCache(parsed.data.name)
     res.status(201).json({ name: server.name, toolCount: server.tools.length, connected: true })
   } catch (error) {
     next(new AppError(error instanceof Error ? error.message : 'Failed to register server', 502))
@@ -302,17 +305,32 @@ adminRoutes.post(
   '/servers/:name/refresh',
   async (req: Request<{ name: string }>, res: Response, next: NextFunction): Promise<void> => {
     const name = req.params.name
-    if (!registry.has(name)) {
+
+    if (registry.has(name)) {
+      try {
+        const tools = await registry.refreshTools(name)
+        clearReadCache(name)
+        res.json({ name, toolCount: tools.length, reconnected: false })
+      } catch (error) {
+        next(new AppError(error instanceof Error ? error.message : 'Failed to refresh tools', 502))
+      }
+      return
+    }
+
+    // Persisted but not connected (failed at startup or after a reconnect):
+    // try to open a new session with the stored config.
+    const config = await getServerConfig(name)
+    if (config === null) {
       res.status(404).json({ error: `Server "${name}" is not registered` })
       return
     }
 
     try {
-      const tools = await registry.refreshTools(name)
+      const server = await registry.connect(config)
       clearReadCache(name)
-      res.json({ name, toolCount: tools.length })
+      res.json({ name, toolCount: server.tools.length, reconnected: true })
     } catch (error) {
-      next(new AppError(error instanceof Error ? error.message : 'Failed to refresh tools', 502))
+      next(new AppError(error instanceof Error ? error.message : 'Failed to connect server', 502))
     }
   }
 )

@@ -51,6 +51,7 @@ export const servers = pgTable('servers', {
 export const auditLogs = pgTable('audit_logs', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id),
+  method: text('method').notNull().default('tools/call'),
   serverName: text('server_name').notNull(),
   toolName: text('tool_name').notNull(),
   requestJson: jsonb('request_json').$type<unknown>().notNull(),
@@ -81,6 +82,12 @@ export const approvals = pgTable('approvals', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   decidedAt: timestamp('decided_at', { withTimezone: true }),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+})
+
+export const gatewaySettings = pgTable('gateway_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').$type<unknown>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export type Profile = typeof profiles.$inferSelect
